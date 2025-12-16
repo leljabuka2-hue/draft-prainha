@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import numpy as np # Importante para o sorteio aleatório
 from io import BytesIO
 
 # --- CONFIGURAÇÃO DA PÁGINA (ESTILO IPHONE) ---
@@ -20,9 +21,11 @@ def local_css():
         .stButton > button {
             border-radius: 12px; background-color: #007AFF; color: white; border: none; padding: 10px 20px;
         }
-        /* Ajuste para Multiselect ficar arredondado */
-        .stMultiSelect > div > div > div {
-            border-radius: 12px;
+        .stMultiSelect > div > div > div { border-radius: 12px; }
+        
+        /* Estilo para destacar a média na simulação */
+        .metric-box {
+            background-color: #F2F2F7; padding: 10px; border-radius: 10px; text-align: center; font-weight: bold;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -115,9 +118,10 @@ with st.sidebar:
 
 st.markdown("<h1 style='font-size: 3rem;'>⚽ Draft Prainha 2025</h1>", unsafe_allow_html=True)
 
-tab1, tab2, tab3 = st.tabs(["📋 Mercado", "📢 Sala de Draft", "📊 Elencos"])
+# AGORA SÃO 4 ABAS
+tab1, tab2, tab3, tab4 = st.tabs(["📋 Mercado", "📢 Sala de Draft", "📊 Elencos", "🎲 Simulação"])
 
-# --- ABA 1: MERCADO (COM FILTRO DE POSIÇÃO) ---
+# --- ABA 1: MERCADO ---
 with tab1:
     col1, col2, col3 = st.columns(3)
     col1.metric("Total", len(df))
@@ -127,34 +131,25 @@ with tab1:
     st.markdown("<div class='card-container'>", unsafe_allow_html=True)
     st.markdown("### 🔍 Mercado da Bola")
     
-    # --- ÁREA DE FILTROS ---
     c_busca, c_filtro = st.columns([2, 1])
-    
     with c_busca:
         busca = st.text_input("Buscar jogador:", placeholder="Digite o nome...")
-    
     with c_filtro:
         filtro_posicao = st.multiselect("Filtrar Posição:", options=POSICOES, placeholder="Todas")
     
-    # LÓGICA DE FILTRAGEM
     df_disp = df[df['Status']=='Disponível'].copy()
-    
-    # 1. Filtra por Nome
     if busca:
         df_disp = df_disp[df_disp['Nome'].str.contains(busca, case=False, na=False)]
-    
-    # 2. Filtra por Posição (se houver alguma selecionada)
     if filtro_posicao:
         df_disp = df_disp[df_disp['Posicao'].isin(filtro_posicao)]
 
-    # TABELA EDITÁVEL
     edited_df = st.data_editor(
         df_disp[['ID', 'Nome', 'Posicao', 'Nota']],
         hide_index=True, use_container_width=True, height=400,
         column_config={
             "ID": None,
             "Posicao": st.column_config.SelectboxColumn("Posição", options=POSICOES, required=True),
-            "Nota": st.column_config.NumberColumn("Nota (0-10)", min_value=0, max_value=10, step=1, help="Edite a nota aqui"),
+            "Nota": st.column_config.NumberColumn("Nota (0-10)", min_value=0, max_value=10, step=1),
         },
         disabled=["ID"], key="mercado_editor"
     )
@@ -213,7 +208,6 @@ with tab2:
             if i + j < len(todas_posicoes):
                 pos = todas_posicoes[i + j]
                 jog_p = disp[disp['Posicao'] == pos].sort_values(by='Nota', ascending=False)
-                
                 with cols[j]:
                     st.markdown(f"<div style='background: white; padding: 10px; border-radius: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);'><h4 style='color:#007AFF; margin:0;'>{pos} <span style='color:gray; font-size:0.8em'>({len(jog_p)})</span></h4></div>", unsafe_allow_html=True)
                     if not jog_p.empty:
@@ -221,12 +215,7 @@ with tab2:
                             jog_p[['Nome', 'Nota']], 
                             hide_index=True, use_container_width=True, height=200,
                             column_config={
-                                "Nota": st.column_config.ProgressColumn(
-                                    "Força",
-                                    format="%d",
-                                    min_value=0,
-                                    max_value=10,
-                                )
+                                "Nota": st.column_config.ProgressColumn("Força", format="%d", min_value=0, max_value=10)
                             }
                         )
                     else:
@@ -261,3 +250,67 @@ with tab3:
             else:
                 st.write("Vazio")
             st.markdown("</div>", unsafe_allow_html=True)
+
+# --- ABA 4: SIMULAÇÃO (NOVA) ---
+with tab4:
+    st.markdown("<div class='card-container'>", unsafe_allow_html=True)
+    st.markdown("### 🎲 Simulador de Sorteio Aleatório")
+    st.write("Esta ferramenta sorteia aleatoriamente os jogadores **DISPONÍVEIS** entre os times atuais. **Nada aqui é salvo.** É apenas para teste.")
+    
+    col_btn, _ = st.columns([1, 3])
+    with col_btn:
+        # Se clicar no botão, geramos a simulação
+        if st.button("🔄 Gerar Simulação Aleatória", type="primary", use_container_width=True):
+            # 1. Pega apenas os disponíveis
+            jogadores_simulacao = df[df['Status'] == 'Disponível'].copy()
+            
+            # 2. Embaralha (Shuffle)
+            jogadores_simulacao = jogadores_simulacao.sample(frac=1).reset_index(drop=True)
+            
+            # 3. Distribui entre os times (Round Robin)
+            times_simulacao = st.session_state.lista_times
+            num_times = len(times_simulacao)
+            
+            # Cria lista de times repetida para preencher o dataframe
+            distribuicao = []
+            for i in range(len(jogadores_simulacao)):
+                distribuicao.append(times_simulacao[i % num_times])
+            
+            jogadores_simulacao['Time_Simulado'] = distribuicao
+            
+            # Salva na sessão TEMPORÁRIA (não no banco de dados principal)
+            st.session_state['resultado_simulacao'] = jogadores_simulacao
+            st.rerun()
+            
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Exibe o Resultado da Simulação (se existir)
+    if 'resultado_simulacao' in st.session_state:
+        df_sim = st.session_state['resultado_simulacao']
+        
+        cols_sim = st.columns(2)
+        for i, t in enumerate(st.session_state.lista_times):
+            elenco_sim = df_sim[df_sim['Time_Simulado'] == t]
+            media_forca = elenco_sim['Nota'].mean() if not elenco_sim.empty else 0
+            
+            with cols_sim[i % 2]:
+                st.markdown(f"""
+                <div style='background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;'>
+                        <h3 style='margin:0;'>{t} <span style='font-size:0.7em; color:gray;'>({len(elenco_sim)})</span></h3>
+                        <div class='metric-box'>Média: {media_forca:.1f} ⭐</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                if not elenco_sim.empty:
+                    st.dataframe(
+                        elenco_sim[['Nome', 'Posicao', 'Nota']],
+                        hide_index=True, use_container_width=True,
+                        column_config={
+                            "Nota": st.column_config.ProgressColumn("Força", format="%d", min_value=0, max_value=10)
+                        }
+                    )
+                else:
+                    st.write("Sem jogadores nesta simulação.")
+                
+                st.markdown("</div>", unsafe_allow_html=True)
