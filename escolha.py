@@ -4,14 +4,91 @@ import json
 import os
 from io import BytesIO
 
-# Configuração da página
-st.set_page_config(page_title="Draft Prainha 2025", layout="wide")
+# --- CONFIGURAÇÃO DA PÁGINA (ESTILO IPHONE) ---
+st.set_page_config(page_title="Draft Prainha 2025", layout="wide", page_icon="⚽")
 
-# Arquivos de controle
+# --- CSS CUSTOMIZADO (A MÁGICA ACONTECE AQUI) ---
+def local_css():
+    st.markdown("""
+    <style>
+        /* Fundo geral mais limpo */
+        .stApp {
+            background-color: #F2F2F7; /* Cinza Apple */
+        }
+
+        /* Estilo dos CARDS (Caixas brancas com sombra) */
+        .card-container {
+            background-color: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); /* Sombra suave iOS */
+            margin-bottom: 20px;
+            transition: transform 0.2s;
+        }
+        .card-container:hover {
+            transform: translateY(-2px); /* Efeito de levitação ao passar o mouse */
+        }
+
+        /* Títulos e Métricas */
+        h1, h2, h3 {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #1C1C1E;
+            font-weight: 700;
+        }
+        
+        /* Botões Estilo iOS */
+        .stButton > button {
+            border-radius: 12px;
+            background-color: #007AFF; /* Azul Apple */
+            color: white;
+            border: none;
+            font-weight: 600;
+            padding: 10px 20px;
+            box-shadow: 0 2px 5px rgba(0,122,255,0.2);
+        }
+        .stButton > button:hover {
+            background-color: #0062CC;
+        }
+        
+        /* Inputs e Selectbox arredondados */
+        .stTextInput > div > div > input, 
+        .stSelectbox > div > div > div {
+            border-radius: 12px;
+            border: 1px solid #E5E5EA;
+            background-color: white;
+        }
+
+        /* Métricas (Cards Pequenos) */
+        div[data-testid="stMetric"] {
+            background-color: white;
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            text-align: center;
+        }
+        
+        /* Tabela Bonita */
+        div[data-testid="stDataFrame"] {
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        /* Expander (Acordeão) mais suave */
+        .streamlit-expanderHeader {
+            background-color: white;
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+local_css()
+
+# --- LÓGICA DO SISTEMA (MANTIDA IGUAL) ---
 ARQUIVO_SAVE = "dados_draft_2025.json"
 POSICOES = ['Goleiro', 'Lateral', 'Zagueiro', 'Volante', 'Meia', 'Atacante']
-
-# --- FUNÇÕES ---
 
 def salvar_estado():
     dados = {
@@ -44,143 +121,152 @@ def exportar_para_excel(df):
     return output.getvalue()
 
 # --- SETUP INICIAL ---
-
 if 'setup_concluido' not in st.session_state:
     if not carregar_save_existente():
-        st.title("⚽ Configuração do Draft Prainha")
+        st.markdown("<h1 style='text-align: center;'>⚽ Setup do Draft</h1>", unsafe_allow_html=True)
+        st.markdown("<div class='card-container'>", unsafe_allow_html=True) # Inicio Card
+        
         col1, col2, col3 = st.columns([1,1,2])
         with col3:
+            st.info("📂 Carregue o arquivo JSON para começar")
             arquivo_subido = st.file_uploader("Upload do arquivo JSON", type=['json'])
             if arquivo_subido:
                 dados_json = json.load(arquivo_subido)
                 st.session_state.jogadores = pd.DataFrame(dados_json["jogadores"])
                 st.session_state.lista_times = dados_json["times"]
                 st.session_state.historico = []
-                # Garante colunas essenciais
                 if 'Status' not in st.session_state.jogadores.columns: st.session_state.jogadores['Status'] = 'Disponível'
                 if 'Time' not in st.session_state.jogadores.columns: st.session_state.jogadores['Time'] = None
                 st.session_state.setup_concluido = True
                 salvar_estado(); st.rerun()
+        
+        st.markdown("</div>", unsafe_allow_html=True) # Fim Card
         st.stop()
 
-# --- INTERFACE ---
-
+# --- INTERFACE PRINCIPAL ---
 df = st.session_state.jogadores
 
 with st.sidebar:
-    st.header("⚙️ Gestão")
+    st.markdown("### ⚙️ Painel de Controle")
     
-    with st.expander("➕ Adicionar Novo Jogador"):
-        with st.form("form_novo_jogador", clear_on_submit=True):
-            novo_nome = st.text_input("Nome do Jogador:")
-            nova_pos = st.selectbox("Posição:", POSICOES)
-            nova_nota = st.slider("Nota Inicial:", 0, 10, 5)
-            if st.form_submit_button("Cadastrar Jogador"):
+    with st.expander("➕ Novo Jogador"):
+        with st.form("form_novo", clear_on_submit=True):
+            novo_nome = st.text_input("Nome")
+            nova_pos = st.selectbox("Posição", POSICOES)
+            nova_nota = st.slider("Nota", 0, 10, 5)
+            if st.form_submit_button("Salvar"):
                 if novo_nome:
                     novo_id = int(st.session_state.jogadores['ID'].max() + 1) if not st.session_state.jogadores.empty else 1
-                    novo_registro = {
-                        "ID": novo_id, "Nome": novo_nome, "Posicao": nova_pos, 
-                        "Nota": nova_nota, "Status": "Disponível", "Time": None
-                    }
+                    novo_registro = {"ID": novo_id, "Nome": novo_nome, "Posicao": nova_pos, "Nota": nova_nota, "Status": "Disponível", "Time": None}
                     st.session_state.jogadores = pd.concat([st.session_state.jogadores, pd.DataFrame([novo_registro])], ignore_index=True)
-                    salvar_estado()
-                    st.success(f"{novo_nome} adicionado!")
-                    st.rerun()
+                    salvar_estado(); st.rerun()
 
-    with st.expander("🏆 Editar Nomes dos Times"):
+    with st.expander("🏆 Editar Times"):
         for i, nome_antigo in enumerate(st.session_state.lista_times):
-            novo_nome = st.text_input(f"Time {i+1}:", value=nome_antigo, key=f"time_{i}")
+            novo_nome = st.text_input(f"Time {i+1}", value=nome_antigo, key=f"time_{i}")
             if novo_nome != nome_antigo:
                 st.session_state.lista_times[i] = novo_nome
                 st.session_state.jogadores.loc[st.session_state.jogadores['Time'] == nome_antigo, 'Time'] = novo_nome
                 salvar_estado(); st.rerun()
 
-    st.divider()
+    st.write("---")
     if not df[df['Time'].notna()].empty:
         st.download_button("📥 Baixar Excel", data=exportar_para_excel(df), file_name="draft_prainha.xlsx", use_container_width=True)
-    
-    if st.button("🗑️ Resetar Draft", type="primary", use_container_width=True):
+    if st.button("🗑️ Resetar Tudo"):
         if os.path.exists(ARQUIVO_SAVE): os.remove(ARQUIVO_SAVE)
         st.session_state.clear(); st.rerun()
 
-# --- ABAS ---
-st.title("⚽ Draft Prainha 2025")
-tab1, tab2, tab3 = st.tabs(["📋 Mercado", "📢 Draft", "📊 Elencos"])
+# --- TÍTULO ---
+st.markdown("<h1 style='font-size: 3rem;'>⚽ Draft Prainha 2025</h1>", unsafe_allow_html=True)
+st.markdown("<p style='color: grey;'>Gerencie o mercado, faça escolhas e monte os elencos.</p>", unsafe_allow_html=True)
 
+tab1, tab2, tab3 = st.tabs(["📋 Mercado", "📢 Sala de Draft", "📊 Elencos"])
+
+# --- ABA 1: MERCADO ---
 with tab1:
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total", len(df))
-    # Contagem segura de goleiros
-    gols = len(df[df['Posicao'].str.contains('Goleiro', na=False, case=False)])
-    c2.metric("Goleiros", gols)
-    c3.metric("Disponíveis", len(df[df['Status']=='Disponível']))
+    # Cards de Métricas
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total", len(df))
+    col2.metric("Goleiros", len(df[df['Posicao'].str.contains('Goleiro', na=False, case=False)]))
+    col3.metric("Disponíveis", len(df[df['Status']=='Disponível']))
     
-    busca = st.text_input("🔍 Pesquisar jogador:")
+    st.markdown("<div class='card-container'>", unsafe_allow_html=True)
+    st.markdown("### 🔍 Mercado da Bola")
+    
+    col_search, col_space = st.columns([2,1])
+    with col_search:
+        busca = st.text_input("Buscar jogador...", placeholder="Digite o nome")
+    
     df_disp = df[df['Status']=='Disponível'].copy()
     if busca:
         df_disp = df_disp[df_disp['Nome'].str.contains(busca, case=False, na=False)]
 
     edited_df = st.data_editor(
         df_disp[['ID', 'Nome', 'Posicao', 'Nota']],
-        hide_index=True, use_container_width=True,
+        hide_index=True, use_container_width=True, height=400,
         column_config={
             "ID": None,
             "Posicao": st.column_config.SelectboxColumn("Posição", options=POSICOES, required=True),
-            "Nota": st.column_config.NumberColumn("Nota", min_value=0, max_value=10, step=1),
+            "Nota": st.column_config.NumberColumn("Nota", min_value=0, max_value=10, step=1, format="%d ⭐"),
         },
         disabled=["ID"], key="mercado_editor"
     )
 
-    if st.button("💾 Salvar Alterações da Tabela"):
+    if st.button("💾 Salvar Alterações", type="primary"):
         for index, row in edited_df.iterrows():
             idx_orig = df[df['ID'] == row['ID']].index[0]
             st.session_state.jogadores.at[idx_orig, 'Nome'] = row['Nome']
             st.session_state.jogadores.at[idx_orig, 'Posicao'] = row['Posicao']
             st.session_state.jogadores.at[idx_orig, 'Nota'] = row['Nota']
-        salvar_estado(); st.success("Salvo!"); st.rerun()
+        salvar_estado(); st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
 
+# --- ABA 2: DRAFT ---
 with tab2:
-    col_j, col_t = st.columns(2)
+    st.markdown("<div class='card-container'>", unsafe_allow_html=True)
+    st.markdown("### 🎙️ Fazer Escolha")
+    
+    c1, c2 = st.columns(2)
     disp = df[df['Status'] == 'Disponível']
-    with col_j:
-        id_sel = st.selectbox("Jogador:", disp['ID'].tolist(), format_func=lambda x: f"{df[df['ID']==x]['Nome'].values[0]} ({df[df['ID']==x]['Posicao'].values[0]})", index=None)
-    with col_t:
-        time_sel = st.selectbox("Time:", st.session_state.lista_times, index=None)
+    with c1:
+        id_sel = st.selectbox("Selecione o Jogador", disp['ID'].tolist(), format_func=lambda x: f"{df[df['ID']==x]['Nome'].values[0]} ({df[df['ID']==x]['Posicao'].values[0]})", index=None)
+    with c2:
+        time_sel = st.selectbox("Selecione o Time", st.session_state.lista_times, index=None)
     
-    c_conf, c_undo = st.columns([3, 1])
-    with c_conf:
-        if st.button("✅ Confirmar Draft", type="primary", use_container_width=True):
-            if id_sel and time_sel:
-                idx = df[df['ID'] == id_sel].index[0]
-                st.session_state.jogadores.at[idx, 'Status'] = 'Indisponível'
-                st.session_state.jogadores.at[idx, 'Time'] = time_sel
-                st.session_state.historico.append({"msg": f"✅ {time_sel} escolheu {df.at[idx, 'Nome']}", "id_jogador": id_sel})
+    if st.button("✅ Confirmar Draft", type="primary", use_container_width=True):
+        if id_sel and time_sel:
+            idx = df[df['ID'] == id_sel].index[0]
+            st.session_state.jogadores.at[idx, 'Status'] = 'Indisponível'
+            st.session_state.jogadores.at[idx, 'Time'] = time_sel
+            st.session_state.historico.append({"msg": f"✅ {time_sel} escolheu {df.at[idx, 'Nome']}", "id_jogador": id_sel})
+            salvar_estado(); st.rerun()
+    
+    if st.button("↩️ Desfazer Última Escolha", use_container_width=True):
+        if st.session_state.historico:
+            ultima = st.session_state.historico.pop()
+            if isinstance(ultima, dict):
+                id_r = ultima["id_jogador"]
+                idx_r = df[df['ID'] == id_r].index[0]
+                st.session_state.jogadores.at[idx_r, 'Status'] = 'Disponível'
+                st.session_state.jogadores.at[idx_r, 'Time'] = None
                 salvar_estado(); st.rerun()
-    
-    with c_undo:
-        if st.button("↩️ Desfazer", use_container_width=True):
-            if st.session_state.historico:
-                ultima_acao = st.session_state.historico.pop()
-                if isinstance(ultima_acao, dict):
-                    id_retro = ultima_acao["id_jogador"]
-                    idx_r = df[df['ID'] == id_retro].index[0]
-                    st.session_state.jogadores.at[idx_r, 'Status'] = 'Disponível'
-                    st.session_state.jogadores.at[idx_r, 'Time'] = None
-                    salvar_estado(); st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    st.write("---")
-    st.markdown("### 📜 Últimas Escolhas")
+    # Histórico estilo Timeline
+    st.markdown("### 📜 Histórico Recente")
     for h in reversed(st.session_state.historico[-5:]):
         msg = h["msg"] if isinstance(h, dict) else str(h)
-        st.caption(msg)
-    
+        st.markdown(f"""
+        <div style='background-color: white; padding: 10px; border-radius: 10px; margin-bottom: 5px; border-left: 5px solid #34C759; box-shadow: 0 2px 5px rgba(0,0,0,0.05);'>
+            {msg}
+        </div>
+        """, unsafe_allow_html=True)
+
     st.write("---")
+    
+    # Grade de Jogadores (Cards)
     st.markdown("### 🔍 Disponíveis por Posição")
-    
-    # --- CORREÇÃO DO LAYOUT (GRADE 3 COLUNAS) ---
-    todas_posicoes = POSICOES # Usa a lista fixa definida no topo
-    
-    # Cria linhas de 3 em 3 para garantir que caiba na tela
+    todas_posicoes = POSICOES
     for i in range(0, len(todas_posicoes), 3):
         cols = st.columns(3)
         for j in range(3):
@@ -189,33 +275,40 @@ with tab2:
                 jog_p = disp[disp['Posicao'] == pos].sort_values(by='Nota', ascending=False)
                 
                 with cols[j]:
-                    st.markdown(f"**{pos}** ({len(jog_p)})")
+                    # Card Branco para cada Posição
+                    st.markdown(f"""
+                    <div style='background-color: white; padding: 15px; border-radius: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); height: 100%;'>
+                        <h4 style='margin:0; color:#007AFF;'>{pos} <span style='font-size:0.8em; color:gray;'>({len(jog_p)})</span></h4>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
                     if not jog_p.empty:
-                        st.dataframe(
-                            jog_p[['Nome', 'Nota']], 
-                            hide_index=True, 
-                            use_container_width=True, 
-                            height=200
-                        )
+                        st.dataframe(jog_p[['Nome', 'Nota']], hide_index=True, use_container_width=True, height=200)
                     else:
                         st.caption("Esgotado")
-    # -----------------------------------------------
+                    st.write("") # Espaço
 
+# --- ABA 3: ELENCOS ---
 with tab3:
     cols_t = st.columns(2)
     for i, t in enumerate(st.session_state.lista_times):
         elenco = df[df['Time'] == t]
         with cols_t[i % 2]:
-            with st.expander(f"{t} ({len(elenco)})"):
-                if not elenco.empty:
-                    for _, row in elenco.iterrows():
-                        c_n, c_r = st.columns([4, 1])
-                        c_n.write(f"{row['Nome']} ({row['Posicao']})")
-                        if c_r.button("❌", key=f"del_{row['ID']}"):
-                            idx_del = df[df['ID'] == row['ID']].index[0]
-                            st.session_state.jogadores.at[idx_del, 'Status'] = 'Disponível'
-                            st.session_state.jogadores.at[idx_del, 'Time'] = None
-                            st.session_state.historico = [h for h in st.session_state.historico if (h.get("id_jogador") if isinstance(h, dict) else None) != row['ID']]
-                            salvar_estado(); st.rerun()
-                else:
-                    st.write("Nenhum jogador escolhido ainda.")
+            st.markdown(f"""
+            <div style='background-color: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px;'>
+                <h3 style='margin-bottom: 10px;'>{t} <span style='font-size:0.7em; color:gray;'>({len(elenco)})</span></h3>
+            """, unsafe_allow_html=True)
+            
+            if not elenco.empty:
+                for _, row in elenco.iterrows():
+                    c_n, c_r = st.columns([4, 1])
+                    c_n.write(f"**{row['Nome']}** - {row['Posicao']}")
+                    if c_r.button("❌", key=f"del_{row['ID']}"):
+                        idx_del = df[df['ID'] == row['ID']].index[0]
+                        st.session_state.jogadores.at[idx_del, 'Status'] = 'Disponível'
+                        st.session_state.jogadores.at[idx_del, 'Time'] = None
+                        st.session_state.historico = [h for h in st.session_state.historico if (h.get("id_jogador") if isinstance(h, dict) else None) != row['ID']]
+                        salvar_estado(); st.rerun()
+            else:
+                st.write("Vazio")
+            st.markdown("</div>", unsafe_allow_html=True)
