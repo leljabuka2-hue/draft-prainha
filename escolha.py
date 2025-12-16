@@ -56,6 +56,9 @@ if 'setup_concluido' not in st.session_state:
                 st.session_state.jogadores = pd.DataFrame(dados_json["jogadores"])
                 st.session_state.lista_times = dados_json["times"]
                 st.session_state.historico = []
+                # Garante colunas essenciais
+                if 'Status' not in st.session_state.jogadores.columns: st.session_state.jogadores['Status'] = 'Disponível'
+                if 'Time' not in st.session_state.jogadores.columns: st.session_state.jogadores['Time'] = None
                 st.session_state.setup_concluido = True
                 salvar_estado(); st.rerun()
         st.stop()
@@ -67,7 +70,6 @@ df = st.session_state.jogadores
 with st.sidebar:
     st.header("⚙️ Gestão")
     
-    # ADICIONAR JOGADOR MANUALMENTE
     with st.expander("➕ Adicionar Novo Jogador"):
         with st.form("form_novo_jogador", clear_on_submit=True):
             novo_nome = st.text_input("Nome do Jogador:")
@@ -85,7 +87,6 @@ with st.sidebar:
                     st.success(f"{novo_nome} adicionado!")
                     st.rerun()
 
-    # EDITAR NOMES DOS TIMES
     with st.expander("🏆 Editar Nomes dos Times"):
         for i, nome_antigo in enumerate(st.session_state.lista_times):
             novo_nome = st.text_input(f"Time {i+1}:", value=nome_antigo, key=f"time_{i}")
@@ -109,13 +110,15 @@ tab1, tab2, tab3 = st.tabs(["📋 Mercado", "📢 Draft", "📊 Elencos"])
 with tab1:
     c1, c2, c3 = st.columns(3)
     c1.metric("Total", len(df))
-    c2.metric("Goleiros", len(df[df['Posicao']=='Goleiro']))
+    # Contagem segura de goleiros
+    gols = len(df[df['Posicao'].str.contains('Goleiro', na=False, case=False)])
+    c2.metric("Goleiros", gols)
     c3.metric("Disponíveis", len(df[df['Status']=='Disponível']))
     
     busca = st.text_input("🔍 Pesquisar jogador:")
     df_disp = df[df['Status']=='Disponível'].copy()
     if busca:
-        df_disp = df_disp[df_disp['Nome'].str.contains(busca, case=False)]
+        df_disp = df_disp[df_disp['Nome'].str.contains(busca, case=False, na=False)]
 
     edited_df = st.data_editor(
         df_disp[['ID', 'Nome', 'Posicao', 'Nota']],
@@ -173,19 +176,36 @@ with tab2:
     
     st.write("---")
     st.markdown("### 🔍 Disponíveis por Posição")
-    pos_existentes = sorted(disp['Posicao'].unique())
-    col_pos = st.columns(len(pos_existentes))
-    for i, pos in enumerate(pos_existentes):
-        jog_p = disp[disp['Posicao'] == pos].sort_values(by='Nota', ascending=False)
-        with col_pos[i]:
-            st.markdown(f"**{pos}** ({len(jog_p)})")
-            st.dataframe(jog_p[['Nome', 'Nota']], hide_index=True, use_container_width=True, height=250)
+    
+    # --- CORREÇÃO DO LAYOUT (GRADE 3 COLUNAS) ---
+    todas_posicoes = POSICOES # Usa a lista fixa definida no topo
+    
+    # Cria linhas de 3 em 3 para garantir que caiba na tela
+    for i in range(0, len(todas_posicoes), 3):
+        cols = st.columns(3)
+        for j in range(3):
+            if i + j < len(todas_posicoes):
+                pos = todas_posicoes[i + j]
+                jog_p = disp[disp['Posicao'] == pos].sort_values(by='Nota', ascending=False)
+                
+                with cols[j]:
+                    st.markdown(f"**{pos}** ({len(jog_p)})")
+                    if not jog_p.empty:
+                        st.dataframe(
+                            jog_p[['Nome', 'Nota']], 
+                            hide_index=True, 
+                            use_container_width=True, 
+                            height=200
+                        )
+                    else:
+                        st.caption("Esgotado")
+    # -----------------------------------------------
 
 with tab3:
-    cols = st.columns(2)
+    cols_t = st.columns(2)
     for i, t in enumerate(st.session_state.lista_times):
         elenco = df[df['Time'] == t]
-        with cols[i % 2]:
+        with cols_t[i % 2]:
             with st.expander(f"{t} ({len(elenco)})"):
                 if not elenco.empty:
                     for _, row in elenco.iterrows():
@@ -195,7 +215,7 @@ with tab3:
                             idx_del = df[df['ID'] == row['ID']].index[0]
                             st.session_state.jogadores.at[idx_del, 'Status'] = 'Disponível'
                             st.session_state.jogadores.at[idx_del, 'Time'] = None
-                            st.session_state.historico = [h for h in st.session_state.historico if (h["id_jogador"] if isinstance(h, dict) else None) != row['ID']]
+                            st.session_state.historico = [h for h in st.session_state.historico if (h.get("id_jogador") if isinstance(h, dict) else None) != row['ID']]
                             salvar_estado(); st.rerun()
                 else:
                     st.write("Nenhum jogador escolhido ainda.")
