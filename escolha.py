@@ -2,13 +2,13 @@ import streamlit as st
 import pandas as pd
 import json
 import os
-import numpy as np # Importante para o sorteio aleatório
+import numpy as np
 from io import BytesIO
 
 # --- CONFIGURAÇÃO DA PÁGINA (ESTILO IPHONE) ---
 st.set_page_config(page_title="Draft Prainha 2025", layout="wide", page_icon="⚽")
 
-# --- CSS CUSTOMIZADO ---
+# --- CSS CUSTOMIZADO (Define o visual antes de tudo) ---
 def local_css():
     st.markdown("""
     <style>
@@ -21,9 +21,8 @@ def local_css():
         .stButton > button {
             border-radius: 12px; background-color: #007AFF; color: white; border: none; padding: 10px 20px;
         }
+        .stTextInput > div > div > input { border-radius: 12px; }
         .stMultiSelect > div > div > div { border-radius: 12px; }
-        
-        /* Estilo para destacar a média na simulação */
         .metric-box {
             background-color: #F2F2F7; padding: 10px; border-radius: 10px; text-align: center; font-weight: bold;
         }
@@ -31,6 +30,36 @@ def local_css():
     """, unsafe_allow_html=True)
 
 local_css()
+
+# --- 🔒 SISTEMA DE LOGIN (NOVIDADE) ---
+if 'logado' not in st.session_state:
+    st.session_state.logado = False
+
+if not st.session_state.logado:
+    # Tela de Login Centralizada
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center;'>🔒 Acesso Restrito</h1>", unsafe_allow_html=True)
+        st.markdown("<div class='card-container'>", unsafe_allow_html=True)
+        
+        usuario = st.text_input("Usuário", placeholder="Digite seu usuário")
+        senha = st.text_input("Senha", type="password", placeholder="Digite sua senha")
+        
+        if st.button("Entrar", type="primary", use_container_width=True):
+            if usuario == "prainha" and senha == "prainha":
+                st.session_state.logado = True
+                st.rerun() # Recarrega a página para liberar o acesso
+            else:
+                st.error("🚫 Acesso Negado: Usuário ou senha incorretos.")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    st.stop() # 🛑 PARE AQUI se não estiver logado
+
+# =========================================================
+# DAQUI PARA BAIXO É O CÓDIGO DO SISTEMA (SÓ CARREGA SE LOGADO)
+# =========================================================
 
 # --- LÓGICA DO SISTEMA ---
 ARQUIVO_SAVE = "dados_draft_2025.json"
@@ -112,13 +141,19 @@ with st.sidebar:
     st.write("---")
     if not df[df['Time'].notna()].empty:
         st.download_button("📥 Baixar Excel", data=exportar_para_excel(df), file_name="draft_prainha.xlsx", use_container_width=True)
+    
+    # Botão de Logout
+    if st.button("🔒 Sair / Logout"):
+        st.session_state.logado = False
+        st.rerun()
+        
     if st.button("🗑️ Resetar Tudo"):
         if os.path.exists(ARQUIVO_SAVE): os.remove(ARQUIVO_SAVE)
         st.session_state.clear(); st.rerun()
 
 st.markdown("<h1 style='font-size: 3rem;'>⚽ Draft Prainha 2025</h1>", unsafe_allow_html=True)
 
-# AGORA SÃO 4 ABAS
+# 4 ABAS (Mercado, Draft, Elencos, Simulação)
 tab1, tab2, tab3, tab4 = st.tabs(["📋 Mercado", "📢 Sala de Draft", "📊 Elencos", "🎲 Simulação"])
 
 # --- ABA 1: MERCADO ---
@@ -251,43 +286,32 @@ with tab3:
                 st.write("Vazio")
             st.markdown("</div>", unsafe_allow_html=True)
 
-# --- ABA 4: SIMULAÇÃO (NOVA) ---
+# --- ABA 4: SIMULAÇÃO ---
 with tab4:
     st.markdown("<div class='card-container'>", unsafe_allow_html=True)
     st.markdown("### 🎲 Simulador de Sorteio Aleatório")
-    st.write("Esta ferramenta sorteia aleatoriamente os jogadores **DISPONÍVEIS** entre os times atuais. **Nada aqui é salvo.** É apenas para teste.")
+    st.write("Sorteia aleatoriamente os jogadores DISPONÍVEIS entre os times. Nada é salvo no banco principal.")
     
     col_btn, _ = st.columns([1, 3])
     with col_btn:
-        # Se clicar no botão, geramos a simulação
-        if st.button("🔄 Gerar Simulação Aleatória", type="primary", use_container_width=True):
-            # 1. Pega apenas os disponíveis
+        if st.button("🔄 Gerar Simulação", type="primary", use_container_width=True):
             jogadores_simulacao = df[df['Status'] == 'Disponível'].copy()
-            
-            # 2. Embaralha (Shuffle)
             jogadores_simulacao = jogadores_simulacao.sample(frac=1).reset_index(drop=True)
-            
-            # 3. Distribui entre os times (Round Robin)
             times_simulacao = st.session_state.lista_times
             num_times = len(times_simulacao)
             
-            # Cria lista de times repetida para preencher o dataframe
             distribuicao = []
             for i in range(len(jogadores_simulacao)):
                 distribuicao.append(times_simulacao[i % num_times])
             
             jogadores_simulacao['Time_Simulado'] = distribuicao
-            
-            # Salva na sessão TEMPORÁRIA (não no banco de dados principal)
             st.session_state['resultado_simulacao'] = jogadores_simulacao
             st.rerun()
             
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Exibe o Resultado da Simulação (se existir)
     if 'resultado_simulacao' in st.session_state:
         df_sim = st.session_state['resultado_simulacao']
-        
         cols_sim = st.columns(2)
         for i, t in enumerate(st.session_state.lista_times):
             elenco_sim = df_sim[df_sim['Time_Simulado'] == t]
@@ -311,6 +335,5 @@ with tab4:
                         }
                     )
                 else:
-                    st.write("Sem jogadores nesta simulação.")
-                
+                    st.write("Sem jogadores.")
                 st.markdown("</div>", unsafe_allow_html=True)
