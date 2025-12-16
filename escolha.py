@@ -20,6 +20,10 @@ def local_css():
         .stButton > button {
             border-radius: 12px; background-color: #007AFF; color: white; border: none; padding: 10px 20px;
         }
+        /* Ajuste para Multiselect ficar arredondado */
+        .stMultiSelect > div > div > div {
+            border-radius: 12px;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -113,7 +117,7 @@ st.markdown("<h1 style='font-size: 3rem;'>⚽ Draft Prainha 2025</h1>", unsafe_a
 
 tab1, tab2, tab3 = st.tabs(["📋 Mercado", "📢 Sala de Draft", "📊 Elencos"])
 
-# --- ABA 1: MERCADO (EDITÁVEL) ---
+# --- ABA 1: MERCADO (COM FILTRO DE POSIÇÃO) ---
 with tab1:
     col1, col2, col3 = st.columns(3)
     col1.metric("Total", len(df))
@@ -123,12 +127,27 @@ with tab1:
     st.markdown("<div class='card-container'>", unsafe_allow_html=True)
     st.markdown("### 🔍 Mercado da Bola")
     
-    busca = st.text_input("Buscar jogador...", placeholder="Digite o nome")
+    # --- ÁREA DE FILTROS ---
+    c_busca, c_filtro = st.columns([2, 1])
+    
+    with c_busca:
+        busca = st.text_input("Buscar jogador:", placeholder="Digite o nome...")
+    
+    with c_filtro:
+        filtro_posicao = st.multiselect("Filtrar Posição:", options=POSICOES, placeholder="Todas")
+    
+    # LÓGICA DE FILTRAGEM
     df_disp = df[df['Status']=='Disponível'].copy()
+    
+    # 1. Filtra por Nome
     if busca:
         df_disp = df_disp[df_disp['Nome'].str.contains(busca, case=False, na=False)]
+    
+    # 2. Filtra por Posição (se houver alguma selecionada)
+    if filtro_posicao:
+        df_disp = df_disp[df_disp['Posicao'].isin(filtro_posicao)]
 
-    # AQUI MANTEMOS NUMBERCOLUMN PARA VOCÊ PODER EDITAR
+    # TABELA EDITÁVEL
     edited_df = st.data_editor(
         df_disp[['ID', 'Nome', 'Posicao', 'Nota']],
         hide_index=True, use_container_width=True, height=400,
@@ -198,7 +217,6 @@ with tab2:
                 with cols[j]:
                     st.markdown(f"<div style='background: white; padding: 10px; border-radius: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);'><h4 style='color:#007AFF; margin:0;'>{pos} <span style='color:gray; font-size:0.8em'>({len(jog_p)})</span></h4></div>", unsafe_allow_html=True)
                     if not jog_p.empty:
-                        # AQUI ESTÁ A MUDANÇA VISUAL: ProgressColumn
                         st.dataframe(
                             jog_p[['Nome', 'Nota']], 
                             hide_index=True, use_container_width=True, height=200,
@@ -223,7 +241,6 @@ with tab3:
         with cols_t[i % 2]:
             st.markdown(f"<div style='background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px;'><h3 style='margin-bottom: 10px;'>{t} <span style='font-size:0.7em; color:gray;'>({len(elenco)})</span></h3>", unsafe_allow_html=True)
             if not elenco.empty:
-                # Elenco também ganha barra de progresso visual
                 st.dataframe(
                     elenco[['Nome', 'Posicao', 'Nota']],
                     hide_index=True, use_container_width=True,
@@ -231,7 +248,6 @@ with tab3:
                         "Nota": st.column_config.ProgressColumn("Força", format="%d", min_value=0, max_value=10)
                     }
                 )
-                # Botões de remover individuais (fora da tabela para simplificar)
                 with st.expander("Gerenciar/Remover Jogadores"):
                     for _, row in elenco.iterrows():
                         c_n, c_r = st.columns([4, 1])
